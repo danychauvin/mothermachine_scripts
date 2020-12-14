@@ -1,0 +1,10 @@
+date,description,f_start,f_end,condition,t_interval,orientation,data_path
+20201023,spent_arabinose,0,120,glucose_pre_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch0_curated
+20201023,spent_arabinose,120,200,spent_arabinose,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch0_curated
+20201023,spent_arabinose,200,Inf,glucose_post_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch0_curated
+20201023,lactose,0,120,glucose_pre_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch1_curated
+20201023,lactose,120,200,lactose,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch1_curated
+20201023,lactose,200,Inf,glucose_post_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch1_curated
+20201023,spent_lactose,0,120,glucose_pre_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch2_curated
+20201023,spent_lactose,120,200,spent_lactose,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch2_curated
+20201023,spent_lactose,200,Inf,glucose_post_switch,3,b,/scicore/home/nimwegen/rocasu25/MM_Data/Dany/20201023/20201023_bottom_ch2_curated

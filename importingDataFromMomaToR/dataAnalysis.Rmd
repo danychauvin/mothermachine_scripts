@@ -1,0 +1,73 @@
+---
+title: "dataAnalysis"
+author: "Dany Chauvin"
+date: "12/14/2020"
+output: html_document
+---
+
+This is supposed to be a generic script for mother machine data analysis in Rstudio.
+
+# Importing packages, functions and data
+
+Restart R at this point.
+
+```{r}
+path_to_data_summary <- "/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/comlacDataSet.csv"
+#Calling functions and packages
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/loadFunctionsAndPackages.R")
+#Import data
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/deepMomaToDf.R")
+```
+# Setting strains
+
+In multiplex experiments, different growth lanes might have different strains, characterized by different fluorescence backgrounds. The identity of these strains have to be attached to myframes_to_mycells and mycells. This can be attached to the data using .csv files or directly here.
+
+```{r}
+myframes_to_mycells <- myframes_to_mycells %>% 
+   mutate(strain='asc662')
+```
+# Converting GFP units
+
+Depending on the strain, fluorescence signal has to be converted to GFP numbers with different conversion factors.
+
+```{r}
+myframes_to_mycells <- myframes_to_mycells %>%
+  # append relevant conversion parameters
+  mutate(autofluo_predict=NA, fp_per_dn=NA,
+         # case of GFPmut2 (from zaslaver library)
+         autofluo_predict = ifelse(strain!='asc662', 133.6, autofluo_predict),
+         fp_per_dn = ifelse(strain!='asc662', 0.198, fp_per_dn),
+         # case of asc662
+         autofluo_predict = ifelse(strain=='asc662', 422.8, autofluo_predict),
+         fp_per_dn = ifelse(strain=='asc662', 0.0361 * 4, fp_per_dn)) %>% 
+  # convert to gfp units (after subtracting autofluorescence)
+  mutate(fluogfp_amplitude = fluo_amplitude - autofluo_predict * length_um,
+         gfp_nb = fluogfp_amplitude * fp_per_dn ) %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  mutate(g_birth=first(gfp_nb)) %>% 
+  mutate(g_div=last(gfp_nb))
+
+cell_fluo_info <- myframes_to_mycells %>% 
+  distinct(cell,g_birth,g_div)
+```
+
+# Propagating fluorescence information to full cell cycle
+
+```{r}
+mycells <- mycells %>% 
+  left_join(cell_fluo_info,by=c("cell")) %>% 
+  mutate(c_birth=g_birth/l_birth,
+         c_div=g_div/l_div,
+         dg=g_div - g_birth,
+         dcdt=(g_div/l_div - g_birth/l_birth) / div_time,
+         g=log(g_div/g_birth) / div_time, # would be cleaner from a fit but difficult to compare
+         gamma=dg/dl,
+         q=dg/dl*alpha)
+```
+
+# Analysis
+
+Now analysis can be performed. 
+
+
