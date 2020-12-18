@@ -12,11 +12,11 @@ This is supposed to be a generic script for mother machine data analysis in Rstu
 Restart R at this point.
 
 ```{r}
-path_to_data_summary <- "/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/comlacDataSet.csv"
+path_to_data_summary <- "/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/constitexprData.csv"
 #Calling functions and packages
-source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/loadFunctionsAndPackages.R")
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/loadFunctionsAndPackages.R")
 #Import data
-source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/deepMomaToDf.R")
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/deepMomaToDf.R")
 ```
 # Setting strains
 

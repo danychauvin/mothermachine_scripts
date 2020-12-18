@@ -25,7 +25,8 @@ myconditions <- readr::read_csv(path_to_data_summary,
                                  condition=col_character(),
                                  t_interval=col_double(),
                                  orientation=col_character(),
-                                 data_path=col_character()))
+                                 data_path=col_character(),
+                                 promoter=col_character()))
                                                 
 
 # Computing t_start and t_end in seconds
@@ -155,7 +156,7 @@ myframes_to_mycells <- myframes %>%
   group_by(cell) %>% 
   filter(parent_id!=-1) %>% 
   filter(end_type=='div') %>% 
-  #filter(switch==FALSE) %>% 
+  filter(switch==FALSE) %>% 
   filter(n()>4) %>% 
   ungroup()
 
