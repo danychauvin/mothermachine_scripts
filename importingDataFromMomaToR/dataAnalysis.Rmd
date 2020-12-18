@@ -12,11 +12,11 @@ This is supposed to be a generic script for mother machine data analysis in Rstu
 Restart R at this point.
 
 ```{r}
-path_to_data_summary <- "/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/comlacDataSet.csv"
+path_to_data_summary <- "/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/comlacDataSet.csv"
 #Calling functions and packages
-source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/loadFunctionsAndPackages.R")
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/loadFunctionsAndPackages.R")
 #Import data
-source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/codes/constitexpr/importingDataFromMomaToR/deepMomaToDf.R")
+source("/scicore/home/nimwegen/rocasu25/Documents/Projects/biozentrum/mothermachine_scripts/importingDataFromMomaToR/deepMomaToDf.R")
 ```
 # Setting strains
 
@@ -65,9 +65,116 @@ mycells <- mycells %>%
          gamma=dg/dl,
          q=dg/dl*alpha)
 ```
+# Analyzing data
 
-# Analysis
+## How is it currently done?
+First, cells that have frames before and after or at the switch are kept.
+Then the trace of the cells and their daughters are concatenated.
+Then, the lag is computed.
+Each experiment is descrived by its "description" field which tells, which second medium is being used.
+I can define a filter based on this (condition == medium).
+For these cells, a trace_id will be written (their own id).
+Then the daughters of these cells will be selected, and trace_id will be computed with their parent_id.
+cbind will be called on these datasets, length, and gfp will be sumed up.
+Based on this, lag will be estimated.
 
-Now analysis can be performed. 
+```{r}
+myframes_mother_and_daughters <- myframes_mother_daughters_compute(myframes_to_mycells)
+```
+
+# Plot traces
+## GFP traces
+
+```{r}
+#Inspect data
+selected_trace <- myframes_mother_and_daughters %>%
+  distinct(trace_id) %>% 
+  sample_n(147)
+
+ myframes_mother_and_daughters %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(time_sec/60,log(length_um),group=trace_id,col=type)) +
+  geom_vline(aes(xintercept=360))+
+  facet_wrap(~description)+
+  theme_cowplot()
+
+ myframes_mother_and_daughters %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(time_sec/60,gfp_nb,group=trace_id,col=type)) +
+  geom_vline(aes(xintercept=360))+
+  facet_wrap(~description)+
+  theme_cowplot()
+
+ myframes_mother_and_daughters %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(log(length_um),gfp_nb,group=trace_id,col=type)) +
+  #geom_vline(aes(xintercept=360))+
+  facet_wrap(~description,scales="free")+
+  theme_cowplot()
+```
+
+So it seems that all cells wake up, but... some never induce!
+They keep growing with very low induction level.
+
+# What about Thomas's data? Do I see the same thing?
+
+First need to put them according to the good format.
+Work with myframes.
+
+```{r}
+base::load("/scicore/home/nimwegen/julou/Documents/Biozentrum/Projects/MoM_Switch/share/MoM_Switch_Dany_20201216.RData")
+```
+Changing myframes to be in the good format.
+
+```{r}
+media_df <- readr::read_csv("/scicore/home/nimwegen/rocasu25/MM_Data/Dany/MoM_lacInduction_data/media_df.csv")
+
+myframes_thomas <- myframes %>% 
+  mutate(orientation="b") %>% 
+  mutate(cell=paste(date,pos,orientation,gl,id,sep=".")) %>% 
+  filter(condition %in% unique(media_df$condition)) %>% 
+  left_join(media_df,by=c("condition","medium")) %>% 
+  select(-c(medium,condition)) %>% 
+  mutate(condition=new_medium) %>% 
+  select(-new_medium)
+```
+
+```{r}
+thomas_frames_arabinose <- myframes_mother_daughters_compute(myframes_thomas)
+```
+```{r}
+#Inspect data
+selected_trace <- thomas_frames_arabinose %>%
+  distinct(trace_id) %>% 
+  sample_n(500)
+
+thomas_frames_arabinose %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(time_sec/60,log(length_um),group=trace_id,col=type)) +
+  geom_vline(aes(xintercept=360))+
+  facet_wrap(~description)+
+  theme_cowplot()
+
+thomas_frames_arabinose %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(time_sec/60,gfp_nb,group=trace_id,col=type)) +
+  geom_vline(aes(xintercept=360))+
+  facet_wrap(~description)+
+  theme_cowplot()
+
+thomas_frames_arabinose %>% 
+  semi_join(selected_trace,by=c("trace_id")) %>% 
+  ggplot()+
+  geom_line(aes(log(length_um),gfp_nb,group=trace_id,col=type)) +
+  #geom_vline(aes(xintercept=360))+
+  facet_wrap(~description,scales="free")+
+  theme_cowplot()
+```
+# Computing lags distributions
 
 

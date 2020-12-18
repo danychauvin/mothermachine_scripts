@@ -13,7 +13,7 @@ vertical_cutoff <- 150 #Necessary to get rid of cells that are touching the top 
 
 # Parallel environment for multidplyr
 mycluster <- min(30, parallel::detectCores()-1) %>%  # do not use more than 30 cores
-  default_cluster() %>% cluster_library( # load currently loaded packages on each core
+  new_cluster() %>% cluster_library( # load currently loaded packages on each core
     names(sessionInfo()$otherPkgs))
 
 myconditions <- readr::read_csv(path_to_data_summary,
@@ -153,8 +153,8 @@ myframes <- myframes %>%
 
 myframes_to_mycells <- myframes %>% 
   group_by(cell) %>% 
-  filter(parent_id!=-1) %>% 
-  filter(end_type=='div') %>% 
+  #filter(parent_id!=-1) %>% 
+  #filter(end_type=='div') %>% 
   #filter(switch==FALSE) %>% 
   filter(n()>4) %>% 
   ungroup()
@@ -181,7 +181,7 @@ mycells <- myframes_to_mycells %>%
 
 mycells <- mycells %>% 
   # filter by r2 of exponential fit
-  filter(logl_time_r2>0.95) %>% 
+  #filter(logl_time_r2>0.95) %>% 
   # create new variables of interest
   mutate(dl=l_div - l_birth,
          alpha=log(l_div/l_birth) / div_time) # ok since l_xxx are fitted
