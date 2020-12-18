@@ -24,7 +24,7 @@ In multiplex experiments, different growth lanes might have different strains, c
 
 ```{r}
 myframes_to_mycells <- myframes_to_mycells %>% 
-   mutate(strain='asc662')
+   mutate(strain='MG1655')
 ```
 # Converting GFP units
 
@@ -64,10 +64,184 @@ mycells <- mycells %>%
          g=log(g_div/g_birth) / div_time, # would be cleaner from a fit but difficult to compare
          gamma=dg/dl,
          q=dg/dl*alpha)
+
+# Change factor values
+
+mycells$condition <- factor(mycells$condition,levels=c("acetate","glycerol","glucose","glucoseaa"))
+myframes_to_mycells$condition <- factor(myframes_to_mycells$condition,levels=c("acetate","glycerol","glucose","glucoseaa"))
+myframes_to_mycells$promoter <- factor(myframes_to_mycells$promoter,levels=c("hi1","hi3","med2","med3","rplN","rpmB","rpsB","rrnB"))
 ```
 
 # Analysis
 
-Now analysis can be performed. 
+## Integrated variables
+
+Instantaneous measurements of cell phenotype is noisy. A first goal of this work is to derive integrated quantities which are not likely to be sensitive to noise measurements.
+
+Such "robust" quantities are:
+
+- The average exponential growth rate: $\alpha$
+- The mean GFP concentration $<c>=<GFP(t)/l(t)>_{promoter}$
+- The average GFP volumic production $<Q(t)>_t=<\frac{1}{l(t)}\frac{dGFP(t)}{dt}>_t$
+
+The value $\frac{dGFP(t)}{dt}$ is not reachable without a proper noise model. Another approach is to integrate the following equation:
+
+(1) $$\frac{d[GFP](t)}{dt}=Q(t)-\frac{[GFP](t)}{l(t)}\frac{dl(t)}{dt}$$
+(2) $$<Q(t)>=<\frac{d[GFP](t)}{dt}+\frac{[GFP](t)}{l(t)}\frac{dl(t)}{dt}>$$
+(3) $$<Q(t)>=<\frac{d[GFP](t)}{dt}>+<\frac{[GFP](t)}{l(t)}\frac{dl(t)}{dt}>$$
+(3) $$<Q(t)>=<\frac{d[GFP](t)}{dt}>+<\frac{[GFP](t)}{l(t)}\frac{dl(t)}{dt}>$$
+
+Assuming that on first approximation $\alpha=\frac{1}{l(t)}\frac{dl(t)}{dt}$ is constant (only interested in order 0 terms).
+
+(4) $$<Q(t)>=<\frac{d[GFP](t)}{dt}>+<[GFP](t)>\alpha$$
+
+And
+
+$<\frac{d[GFP](t)}{dt}>$ can be computed from a crude estimation: difference between consecutive data points.
+
+## Time correlation between these variables
+
+A natural way to think about this variables is to think of the correlation they present between mother and daughter.
+But is is also possible to look at what's happening between the first half of the cell cycle and the second part of the cell cycle.
+
+## Notes about instantaneous variables and fluctuations in general
+
+To be completed:
+
+The quantity that looks to be, according to me the most important to looks at are to look at two daughters cells:
+
+(5) $$\frac{d[GFP](t)}{dt}=Q(t)-\frac{[GFP](t)}{l(t)}\frac{dl(t)}{dt}$$
+
+Leads to by integration
+
+(6) $$\Delta[GFP]=\int_{t_0}^{t}(Q(t')dt')-\int_{t_0}^{t}(\frac{[GFP](t')}{l(t')}\frac{dl(t')}{dt'}dt'$$ Change in $[GFP]$ between $t_0$ and $t$.
+
+
+The question being: what is driving the phenotypic heterogeneity is therefore to understand, from a time point t0 where the cells are characterized by identical concentration (we suppose here that the concentration is equal in two daughter cells immediately after division): which term is going to cause most of the difference between them: the growth rate fluctuation term? Or the production term? One has to compute:
+
+(7) $$ \Delta\Delta[GFP]_{i,j} $$
+
+Where $i$ and $j$ are different cells.
+One question that someone might already ask is: how long two cells have to grow so that their concentration diverge enough to be noticeable.
+Is this time different between promoters? This can be performed by concatenating cell cycles.
+
+And see how these term diverge with times, for two independent processes. My guess is that if these are controlled by processes with identical parameters, they will not diverge to the infinite.
+
+$P(t)=\int_{t_0}^{t}(Q(t')dt')$
+$D(t)=\int_{t_0}^{t}(\frac{[GFP](t')}{l(t')}\frac{dl(t')}{dt'}dt'$
+
+# Distribution of growth rates
+
+```{r}
+mycells %>% 
+  ggplot(aes(alpha*3600/log(2),col=date))+
+  stat_ecdf()+
+  facet_wrap(~condition,scales="free")+
+  theme_cowplot()+
+  xlab("Doublings per hour")+
+  ylab("CDF")
+```
+
+```{r}
+mycells %>% 
+  ggplot(aes(alpha*3600/log(2),col=condition))+
+  stat_ecdf()+
+  theme_cowplot()+
+  xlab("Doublings per hour")+
+  ylab("CDF")
+```
+
+# Computing mean values of Q
+
+We want to get to: $$<Q(t)>=<\frac{d[GFP](t)}{dt}>+<[GFP](t)>\alpha$$
+First will compute in myframes for each cell: $dgdt=(gfp_nb(t+t_interval)-gfp_nb(t))/t_interval$
+
+```{r}
+mycells_alpha <- mycells %>% 
+  distinct(cell,alpha)
+
+myframes_analysis <- myframes_to_mycells %>% 
+  left_join(mycells_alpha,by=c("cell")) %>% 
+  mutate(lag_gfp_nb=lag(gfp_nb),
+         lag_length_um=lag(length_um),
+         dg=gfp_nb-lag_gfp_nb,
+         dgdt=dg/t_interval,
+         q=dgdt*1/length_um,
+         dldt=(length_um-lag_length_um)/t_interval,
+         d=1/length_um*dldt,
+         c=gfp_nb/length_um,
+         dc=gfp_nb/length_um-lag_gfp_nb/lag_length_um,
+         dcdt=dc/t_interval) %>%
+  group_by(cell) %>% 
+  mutate(mean_q=mean(q,na.rm=TRUE),
+         mean_d=mean(d,na.rm=TRUE),
+         mean_c=mean(c,na.rm=TRUE),
+         ratio_q_d=mean_q/mean_d) %>% 
+  ungroup() %>% 
+  mutate(mean_mean_q=mean(mean_q,na.rm=TRUE),
+         mean_mean_d=mean(mean_d,na.rm=TRUE),
+         mean_mean_c=mean(mean_c,na.rm=TRUE),
+         mean_ratio_q_d=mean(ratio_q_d,na.rm=TRUE))
+```
+
+Visualize data in each condition. Scatter plot
+
+```{r}
+myframes_analysis %>% 
+  distinct(cell,.keep_all=TRUE) %>% 
+  ggplot(aes(condition,log(mean_d)))+
+  geom_boxplot()+
+  geom_jitter(alpha=0.05)+
+  #facet_wrap(~promoter,scales="free")+
+  xlab("Condition")+
+  ylab("log(<D>)")+
+  theme_cowplot()
+
+myframes_analysis %>% 
+  distinct(cell,.keep_all=TRUE) %>% 
+  ggplot(aes(condition,log(mean_q)))+
+  geom_boxplot()+
+  geom_jitter(alpha=0.1)+
+  facet_wrap(~promoter,scales="free")+
+  xlab("Condition")+
+  ylab("log(<Q>)")+
+  theme_cowplot()
+
+myframes_analysis %>% 
+  distinct(cell,.keep_all=TRUE) %>% 
+  ggplot(aes(condition,log(mean_c)))+
+  geom_boxplot()+
+  geom_jitter(alpha=0.05)+
+  facet_wrap(~promoter,scales="free")+
+  xlab("Condition")+
+  ylab("log(<[GFP]>)")+
+  theme_cowplot()
+```
+```{r}
+myframes_analysis %>% 
+  distinct(cell,.keep_all=TRUE) %>% 
+  ggplot(aes(condition,log(ratio_q_d)))+
+  geom_boxplot()+
+  geom_jitter(alpha=0.05)+
+  facet_wrap(~promoter,scales="free")+
+  xlab("Condition")+
+  ylab("log(<Q>/<D>)")+
+  theme_cowplot()
+```
+
+This shows, without the need of any fit, that, the overall trend is that ribosomal promoters compensate for increasing dilution factor, with enhanced production. This is what is causing the differences we observe in terms of GFP concentration. This method seems to be robust versus experimental measurements.
+
+Now, I would like to understand on average, what seems to be responsible for typical observed differences between daughters cells that have similar concentrations at the beginning of their cell cycles.
+
+For that, I first need to compute list of daughter cells in each condition, and then to compute their difference in concentration over time. 
+
+
+
+
+
+
+
+
+
 
 
