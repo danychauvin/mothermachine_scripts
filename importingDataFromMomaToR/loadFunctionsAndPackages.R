@@ -270,3 +270,151 @@ autocorrelationFunction_lag <- function(df,lag){
     unique()
   corvalue <- (mean(new_df$growth_rate_1*new_df$growth_rate_2)-mean(new_df$growth_rate_1)*mean(new_df$growth_rate_2))/(sd(new_df$growth_rate_1)*sd(new_df$growth_rate_2))
   return(corvalue)}
+
+myframes_daughters_compute <- function(df){
+  #input:
+  #cell: with the format paste(date,pos,orientation,gl,sep=".")
+  #time_sec: time in sec since the beginning of the experiment
+  #condition: before the switch it should be "glucose_pre_switch"
+  #description: should match the medium after the switch
+  #parent_id: should be a integer
+  #id: shoud be an integer
+  #length_um
+  #gfp_nb
+  
+  #output:
+  #description: condition experienced by the cells after the switch
+  #condition: condition experienced by the cells at time_sec
+  #trace_id: 'cell' of the mother cell that experience the switch
+  #type: mother or daughter
+  #time_sec: idem above
+  #length_um: if mother, simply the gfp_nb of the mother, if daughters: sum of length_um
+  #gfp_nb: if mother, simply the gfp_nb of the mother, if daughters: sum of gfp_nb
+  
+  new_df <- df %>% 
+    mutate(parent=paste(date,pos,orientation,gl,parent_id,sep=".")) %>% 
+    group_by(cell) %>% 
+    arrange(time_sec) %>% 
+    mutate(lag_gfp_nb=lag(gfp_nb),
+           lag_length_um=lag(length_um),
+           dg=gfp_nb-lag_gfp_nb,
+           dgdt=dg/t_interval,
+           q=dgdt*1/length_um,
+           dldt=(length_um-lag_length_um)/t_interval,
+           d=1/length_um*dldt,
+           c=gfp_nb/length_um,
+           cd=c*d,
+           dc=gfp_nb/length_um-lag_gfp_nb/lag_length_um,
+           dcdt=dc/t_interval) %>%
+    group_by(parent) %>%
+    arrange(cell,time_sec) %>% 
+    mutate(daughter_1=ifelse(row_number()==1,cell,NA)) %>% 
+    fill(daughter_1,.direction="downup") %>% 
+    mutate(daughter_2=ifelse(cell!=daughter_1,cell,NA)) %>% 
+    fill(daughter_2,.direction="downup") %>% 
+    select(parent,daughter_1,daughter_2,cell,time_sec,c,q,cd,length_um,gfp_nb,dgdt,dldt) %>% 
+    ungroup() %>% 
+    group_by(parent) %>%
+    partition(mycluster) %>% 
+    do((function(.df){
+      mat1 <- as.matrix(.df %>% filter(cell==daughter_1) %>% select(-c(parent,daughter_1,daughter_2,cell,time_sec)))
+      mat2 <- as.matrix(.df %>% filter(cell==daughter_2) %>% select(-c(parent,daughter_1,daughter_2,cell,time_sec)))
+      n <- min(nrow(mat1),nrow(mat2))
+      if(n==0){return(tibble())}
+      else{
+        header <- .df %>% filter(cell==daughter_1) %>% select(c(parent,daughter_1,daughter_2,time_sec)) %>% filter(row_number()<=n)  
+        #print(n)
+        mat <- mat2[c(1:n),]-mat1[c(1:n),] #cell2 - cell1
+        mat <-as_tibble(mat)
+        #print(mat)
+        #print(colnames(infos))
+        new_df <- cbind(header,mat) #if nrow(mat)<2, as_tibble messes up the format: columns no longer exists, only value stays...
+        #if(length(colnames(new_df))!=6){print(unique(new_df$parent))}
+        colnames(new_df) <- list("parent","daughter_1","daughter_2","time_sec","delta_c","delta_q","delta_cd","delta_length_um","delta_gfp_nb","delta_dgdt","delta_dldt")
+        return(new_df)}})(.)) %>% 
+    collect() %>% 
+    ungroup() %>% 
+    rename(trace_id=parent)
+
+  return(new_df)
+  
+}
+
+myframes_mother_daughters_compute <- function(df){
+  #input:
+  #cell: with the format paste(date,pos,orientation,gl,sep=".")
+  #time_sec: time in sec since the beginning of the experiment
+  #condition: before the switch it should be "glucose_pre_switch"
+  #description: should match the medium after the switch
+  #parent_id: should be a integer
+  #id: shoud be an integer
+  #length_um
+  #gfp_nb
+  
+  #output:
+  #description: condition experienced by the cells after the switch
+  #condition: condition experienced by the cells at time_sec
+  #trace_id: 'cell' of the mother cell that experience the switch
+  #type: mother or daughter
+  #time_sec: idem above
+  #length_um: if mother, simply the gfp_nb of the mother, if daughters: sum of length_um
+  #gfp_nb: if mother, simply the gfp_nb of the mother, if daughters: sum of gfp_nb
+  
+  cell_experiencing_switch <- df %>% #All cells are taken
+    mutate(parent=cell) %>% 
+    select(cell,parent)
+  
+  myframes_switch <- df %>%  #cells that experience the switch
+    semi_join(cell_experiencing_switch,by=c("cell")) %>% 
+    mutate(trace_id=cell) %>% 
+    mutate(type="mother") %>% 
+    ungroup() %>% 
+    select(description,condition,trace_id,type,time_sec,length_um,gfp_nb)
+  
+  daughters <- df %>% 
+    mutate(parent=paste(date,pos,orientation,gl,parent_id,sep=".")) %>% 
+    semi_join(cell_experiencing_switch,by=c("parent")) %>% 
+    group_by(parent) %>%
+    arrange(cell) %>% 
+    mutate(daughter_1=ifelse(row_number()==1,cell,NA)) %>% 
+    fill(daughter_1,.direction=c("down")) %>% 
+    mutate(daughter_num=ifelse(cell==daughter_1,1,2)) %>% 
+    select(-daughter_1) %>% 
+    ungroup() %>% 
+    select(description,condition,parent,daughter_num,time_sec,length_um,gfp_nb) %>% 
+    group_by(parent) %>% 
+    partition(mycluster) %>% 
+    do((function(.df){
+      mat1 <- as.matrix(.df[c("length_um","gfp_nb","daughter_num")] %>% filter(daughter_num==1) %>% select(-daughter_num))
+      mat2 <- as.matrix(.df[c("length_um","gfp_nb","daughter_num")] %>% filter(daughter_num==2) %>% select(-daughter_num))
+      n <- min(nrow(mat1),nrow(mat2))
+      if(n==0){return(tibble())}
+      else{
+        #print(n)
+        mat <- mat1[c(1:n),]+mat2[c(1:n),]
+        if(n==1){mat <- as_tibble_row(mat)} #bad as_tibble behaviour...
+        else{mat <-as_tibble(mat)}
+        #print(mat)
+        infos <- .df %>% 
+          filter(daughter_num==1) %>% 
+          select(description,condition,parent,time_sec)
+        #print(colnames(infos))
+        new_df <- cbind(infos[c(1:n),],mat) #if nrow(mat)<2, as_tibble messes up the format: columns no longer exists, only value stays...
+        #if(length(colnames(new_df))!=6){print(unique(new_df$parent))}
+        colnames(new_df) <- list("description","condition","parent","time_sec","length_um","gfp_nb")
+        return(new_df)}})(.)) %>% 
+    collect() %>% 
+    ungroup() %>% 
+    rename(trace_id=parent) %>% 
+    mutate(type="daughters")
+  
+  new_df <- rbind(
+    myframes_switch,daughters) %>% 
+    arrange(trace_id,time_sec) %>% 
+    select(description,condition,trace_id,type,time_sec,length_um,gfp_nb)
+  
+  return(new_df)
+  
+}
+
+

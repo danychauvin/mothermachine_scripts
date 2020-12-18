@@ -162,6 +162,7 @@ mycells_alpha <- mycells %>%
 
 myframes_analysis <- myframes_to_mycells %>% 
   left_join(mycells_alpha,by=c("cell")) %>% 
+  group_by(cell) %>% 
   mutate(lag_gfp_nb=lag(gfp_nb),
          lag_length_um=lag(length_um),
          dg=gfp_nb-lag_gfp_nb,
@@ -172,7 +173,6 @@ myframes_analysis <- myframes_to_mycells %>%
          c=gfp_nb/length_um,
          dc=gfp_nb/length_um-lag_gfp_nb/lag_length_um,
          dcdt=dc/t_interval) %>%
-  group_by(cell) %>% 
   mutate(mean_q=mean(q,na.rm=TRUE),
          mean_d=mean(d,na.rm=TRUE),
          mean_c=mean(c,na.rm=TRUE),
@@ -235,13 +235,221 @@ Now, I would like to understand on average, what seems to be responsible for typ
 
 For that, I first need to compute list of daughter cells in each condition, and then to compute their difference in concentration over time. 
 
+```{r}
+daughters <- myframes_daughters_compute(myframes_to_mycells)
+condition_df <- myframes_to_mycells %>% 
+  distinct(cell,condition,promoter) %>% 
+  rename(daughter_1=cell)
 
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  group_by(trace_id) %>%
+  mutate(time=time_sec-first(time_sec)) %>% 
+  ungroup() %>% 
+  ggplot()+
+  geom_line(aes(time,abs(delta_c),group=trace_id))+
+  facet_grid(promoter~condition,scales="free")
+```
 
+```{r}
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  group_by(trace_id) %>%
+  mutate(time=time_sec-first(time_sec)) %>% 
+  ungroup() %>% 
+  group_by(condition,promoter,time) %>% 
+  mutate(mean_delta_c=mean(abs(delta_c),na.rm=TRUE)) %>% 
+  ungroup() %>% 
+  distinct(condition,promoter,time,mean_delta_c) %>% 
+  ggplot()+
+  geom_line(aes(time,log(mean_delta_c)))+
+  facet_grid(promoter~condition,scales="free")+
+  theme_cowplot()
+```
+Overall this is not as nice and as simple as I thought. It seems that daughter cells have very different concentration at birth...
 
+```{r}
+first_concentration_1 <- myframes_analysis %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  filter(row_number()==1) %>% 
+  ungroup() %>%
+  mutate(daughter_1=cell,
+         daughter_2=cell) %>% 
+  rename(c_first_1=c) %>% 
+  select(daughter_1,c_first_1) 
+  
+first_concentration_2 <- first_concentration_1 %>% 
+  rename(daughter_2=daughter_1) %>% 
+  rename(c_first_2=c_first_1)
 
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  distinct(trace_id,daughter_1,daughter_2,promoter,condition) %>% 
+  left_join(first_concentration_1,by=c("daughter_1")) %>%
+  left_join(first_concentration_2,by=c("daughter_2")) %>% 
+  ggplot(aes(log(c_first_1),log(c_first_2)))+
+  geom_point()+
+  facet_wrap(~promoter + condition,scales="free")+
+  theme_cowplot()+
+  xlab("Concentration daughter 1")+
+  ylab("Concentration daughter 2")
+```
+```{r}
+first_concentration_1 <- myframes_analysis %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  filter(row_number()==1) %>% 
+  ungroup() %>%
+  mutate(daughter_1=cell,
+         daughter_2=cell) %>% 
+  rename(c_first_1=c) %>% 
+  select(daughter_1,c_first_1) 
+  
+first_concentration_2 <- first_concentration_1 %>% 
+  rename(daughter_2=daughter_1) %>% 
+  rename(c_first_2=c_first_1)
 
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  distinct(trace_id,daughter_1,daughter_2,promoter,condition) %>% 
+  left_join(first_concentration_1,by=c("daughter_1")) %>%
+  left_join(first_concentration_2,by=c("daughter_2")) %>% 
+  mutate(cond_prom=paste(condition,promoter,sep=".")) %>% 
+  ggplot(aes(c_first_1,c_first_2))+
+  geom_point()+
+  facet_wrap(~cond_prom,scales="free")+
+  theme_cowplot()+
+  xlab("Concentration daughter 1")+
+  ylab("Concentration daughter 2")
+```
+So clearly, concentration between sisters is maintained.
+Is it also the case for sisters 10 points later?
 
+```{r}
+first_concentration_1 <- myframes_analysis %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  filter(row_number()==20) %>% 
+  ungroup() %>%
+  mutate(daughter_1=cell,
+         daughter_2=cell) %>% 
+  rename(c_first_1=c) %>% 
+  select(daughter_1,c_first_1) 
+  
+first_concentration_2 <- first_concentration_1 %>% 
+  rename(daughter_2=daughter_1) %>% 
+  rename(c_first_2=c_first_1)
 
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  distinct(trace_id,daughter_1,daughter_2,promoter,condition) %>% 
+  left_join(first_concentration_1,by=c("daughter_1")) %>%
+  left_join(first_concentration_2,by=c("daughter_2")) %>% 
+  mutate(cond_prom=paste(condition,promoter,sep=".")) %>% 
+  ggplot(aes(c_first_1,c_first_2))+
+  geom_point()+
+  facet_wrap(~cond_prom,scales="free")+
+  theme_cowplot()+
+  xlab("Concentration daughter 1")+
+  ylab("Concentration daughter 2")
+```
+```{r}
+first_concentration_1 <- myframes_analysis %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  filter(row_number()==30) %>% 
+  ungroup() %>%
+  mutate(daughter_1=cell,
+         daughter_2=cell) %>% 
+  rename(c_first_1=c) %>% 
+  select(daughter_1,c_first_1) 
+  
+first_concentration_2 <- first_concentration_1 %>% 
+  rename(daughter_2=daughter_1) %>% 
+  rename(c_first_2=c_first_1)
+
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  distinct(trace_id,daughter_1,daughter_2,promoter,condition) %>% 
+  left_join(first_concentration_1,by=c("daughter_1")) %>%
+  left_join(first_concentration_2,by=c("daughter_2")) %>% 
+  mutate(cond_prom=paste(condition,promoter,sep=".")) %>% 
+  ggplot(aes(c_first_1,c_first_2))+
+  geom_point()+
+  facet_wrap(~cond_prom,scales="free")+
+  theme_cowplot()+
+  xlab("Concentration daughter 1")+
+  ylab("Concentration daughter 2")
+```
+
+Test scrambling the data:
+
+```{r}
+first_concentration_1 <- myframes_analysis %>% 
+  group_by(cell) %>% 
+  arrange(time_sec) %>% 
+  filter(row_number()==round(runif(1, 1, 20),0)) %>% 
+  ungroup() %>%
+  mutate(daughter_1=cell,
+         daughter_2=cell) %>% 
+  rename(c_first_1=c) %>% 
+  select(daughter_1,c_first_1) 
+  
+first_concentration_2 <- first_concentration_1 %>% 
+  rename(daughter_2=daughter_1) %>% 
+  rename(c_first_2=c_first_1)
+
+daughters %>%
+  left_join(condition_df,by=c("daughter_1")) %>% 
+  distinct(trace_id,daughter_1,daughter_2,promoter,condition) %>% 
+  left_join(first_concentration_1,by=c("daughter_1")) %>%
+  left_join(first_concentration_2,by=c("daughter_2")) %>% 
+  mutate(cond_prom=paste(condition,promoter,sep=".")) %>% 
+  ggplot(aes(c_first_1,c_first_2))+
+  geom_point()+
+  facet_wrap(~cond_prom,scales="free")+
+  theme_cowplot()+
+  xlab("Concentration daughter 1")+
+  ylab("Concentration daughter 2")
+```
+It is clear that sister cells have, all along their cell cycle, high correlation in their concentration.
+So I need to look further. Typically after one division.
+
+```{r}
+library(magrittr)
+
+daughters_mothers <- myframes_mother_daughters_compute(myframes_to_mycells)
+
+parent_df <- myframes_to_mycells %>% 
+  mutate(parent=paste(date,pos,orientation,gl,parent_id,sep=".")) %>%
+  distinct(cell,parent)
+
+daughters_mothers <- daughters_mothers %>% 
+  rename(cell=trace_id) %>% 
+  left_join(parent_df,by=c("cell"))
+
+daughters_mothers_2 <- daughters_mothers %>% 
+  filter(parent=="20190515.0.b.12.103") %>% 
+  mutate(c=gfp_nb/length_um) %>% 
+  group_by(parent) %>%
+  nest(type,time_sec,length_um,gfp_nb,c,.key='value_col') %>% 
+  spread(key=cell,value=value_col) %>% 
+  set_colnames(c("description", "condition","parent","cell1","cell2")) %>% 
+  unnest(cell1,cell2,.sep='_')
+
+daughters_mothers_2 <- daughters_mothers %>% 
+  #filter(parent=="20190515.0.b.12.103") %>% 
+  group_by(parent) %>%
+  filter(length(unique(.$cell))==2) %>% 
+  pivot_wider(
+    names_from=cell,
+    values_from=c(type,length_um,gfp_nb),
+    values_fill=NA) %>%
+  set_colnames(c("description", "condition", "time_sec","parent","type_1","type_2","length_um_1","length_um_2","gfp_nb_1","gfp_nb_2")) %>% 
+  drop_na() %>% 
+  ungroup()
+```
 
 
 
