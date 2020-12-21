@@ -441,12 +441,19 @@ daughters_mothers_2 <- daughters_mothers %>%
 daughters_mothers_2 <- daughters_mothers %>% 
   #filter(parent=="20190515.0.b.12.103") %>% 
   group_by(parent) %>%
+  filter(n()>1) %>% 
   filter(length(unique(.$cell))==2) %>% 
-  pivot_wider(
+   do((function(.df){
+    n <- nrow(.df)
+    if(n==0){print("ERROR")}
+    new_df <- .df %>% 
+      pivot_wider(
     names_from=cell,
     values_from=c(type,length_um,gfp_nb),
-    values_fill=NA) %>%
-  set_colnames(c("description", "condition", "time_sec","parent","type_1","type_2","length_um_1","length_um_2","gfp_nb_1","gfp_nb_2")) %>% 
+    values_fill=NA) %>% 
+    set_colnames(c("description", "condition", "time_sec","parent","type_1","type_2","length_um_1","length_um_2","gfp_nb_1","gfp_nb_2"))
+    return(new_df)
+    })(.)) %>%
   drop_na() %>% 
   ungroup()
 ```
